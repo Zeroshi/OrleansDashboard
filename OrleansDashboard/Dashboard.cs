@@ -4,32 +4,44 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using OpenTelemetry;
+using OpenTelemetry.Metrics;
 using Orleans;
 using Orleans.Runtime;
+using OrleansDashboard.Implementation;
+using OrleansDashboard.Implementation.Assets;
 
 namespace OrleansDashboard
 {
     public sealed class Dashboard : IStartupTask, IDisposable
     {
         private IWebHost host;
+        private MeterProvider meterProvider;
         private readonly ILogger<Dashboard> logger;
         private readonly ILocalSiloDetails localSiloDetails;
         private readonly IGrainFactory grainFactory;
+        private readonly DashboardTelemetryExporter dashboardTelemetryExporter;
+        private readonly ISiloGrainClient siloGrainClient;
+        private readonly IAssetProvider assetProvider;
         private readonly DashboardOptions dashboardOptions;
-
-        public static int HistoryLength => 100;
 
         public Dashboard(
             ILogger<Dashboard> logger,
             ILocalSiloDetails localSiloDetails,
             IGrainFactory grainFactory,
-            IOptions<DashboardOptions> dashboardOptions)
+            DashboardTelemetryExporter dashboardTelemetryExporter,
+            IOptions<DashboardOptions> dashboardOptions,
+            ISiloGrainClient siloGrainClient, IAssetProvider assetProvider)
         {
             this.logger = logger;
             this.grainFactory = grainFactory;
             this.localSiloDetails = localSiloDetails;
+            this.dashboardTelemetryExporter = dashboardTelemetryExporter;
+            this.siloGrainClient = siloGrainClient;
+            this.assetProvider = assetProvider;
             this.dashboardOptions = dashboardOptions.Value;
         }
 
@@ -43,13 +55,15 @@ namespace OrleansDashboard
                         new WebHostBuilder()
                             .ConfigureServices(services =>
                             {
+                                //Add IAssetProvider [EmbeddedAssetProvider]
+                                services.AddSingleton(assetProvider);                                
                                 services.AddServicesForHostedDashboard(grainFactory, dashboardOptions);
                             })
                             .Configure(app =>
                             {
                                 if (dashboardOptions.HasUsernameAndPassword())
                                 {
-                                    // only when usename and password are configured
+                                    // only when username and password are configured
                                     // do we inject basicauth middleware in the pipeline
                                     app.UseMiddleware<BasicAuthMiddleware>();
                                 }
@@ -64,7 +78,7 @@ namespace OrleansDashboard
                 }
                 catch (Exception ex)
                 {
-                    logger.Error(10001, ex.ToString());
+                    logger.LogError(10001, ex, "Unable to start dashboard host");
                 }
 
                 logger.LogInformation($"Dashboard listening on {dashboardOptions.Port}");
@@ -72,13 +86,13 @@ namespace OrleansDashboard
 
             await Task.WhenAll(
                 ActivateDashboardGrainAsync(),
-                ActivateSiloGrainAsync());
+                ActivateSiloGrainAsync(),
+                StartOpenTelemetryConsumerAsync());
         }
 
         private async Task ActivateSiloGrainAsync()
         {
-            var siloGrain = grainFactory.GetGrain<ISiloGrain>(localSiloDetails.SiloAddress.ToParsableString());
-
+            var siloGrain = siloGrainClient.GrainService(localSiloDetails.SiloAddress);
             await siloGrain.SetVersion(GetOrleansVersion(), GetHostVersion());
         }
 
@@ -89,11 +103,21 @@ namespace OrleansDashboard
             await dashboardGrain.Init();
         }
 
+        private Task StartOpenTelemetryConsumerAsync()
+        {
+            meterProvider = Sdk.CreateMeterProviderBuilder()
+                .AddMeter("Orleans")
+                .AddReader(new PeriodicExportingMetricReader(dashboardTelemetryExporter, 1000, 1000))
+                .Build();
+            return Task.CompletedTask;
+        }
+
         public void Dispose()
         {
             try
             {
                 host?.Dispose();
+                meterProvider?.Dispose();
             }
             catch
             {

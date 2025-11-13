@@ -16,7 +16,7 @@
     "eventthing": "^1.0.7",
     "humanize-duration": "^3.15.1",
     "react": "^15.6.2",
-    "react-chartjs": "git://github.com/reactjs/react-chartjs.git#chartjs-v2",
+    "react-chartjs": "github:reactjs/react-chartjs#chartjs-v2",
     "react-dom": "^15.6.2"
   },
   "devDependencies": {
@@ -29,7 +29,7 @@
     "envify": "^4.1.0",
     "eslint": "^5.14.1",
     "eslint-plugin-react": "^7.11.1",
-    "mocha": "^5.2.0",
+    "mocha": "^10.1.0",
     "uglify-js": "^3.4.8",
     "uglifyify": "^5.0.1",
     "watchify": "^3.11.1"

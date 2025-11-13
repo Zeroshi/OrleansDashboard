@@ -1,7 +1,25 @@
 # Orleans Dashboard
 
-![](https://github.com/OrleansContrib/OrleansDashboard/workflows/Node%20CI/badge.svg?branch=master) ![](https://github.com/OrleansContrib/OrleansDashboard/workflows/.NET%20Core/badge.svg?branch=master)
-![Nuget](https://img.shields.io/nuget/v/OrleansDashboard)
+> **⚠️ DEPRECATION NOTICE**
+> 
+> **This project has been merged into the main Orleans repository and is no longer actively maintained here.**
+> 
+> Please use the official Orleans Dashboard instead:
+> - **New Repository:** https://github.com/dotnet/orleans
+> - **Migration PR:** https://github.com/dotnet/orleans/pull/9751
+> - **Documentation:** Visit the Orleans documentation for the latest dashboard information
+> 
+> For new projects, please install and use the dashboard from the official Orleans packages.
+
+---
+
+[![.NET Core](https://github.com/OrleansContrib/OrleansDashboard/actions/workflows/dotnetcore.yml/badge.svg)](https://github.com/OrleansContrib/OrleansDashboard/actions/workflows/dotnetcore.yml)
+[![Node CI](https://github.com/OrleansContrib/OrleansDashboard/actions/workflows/nodejs.yml/badge.svg)](https://github.com/OrleansContrib/OrleansDashboard/actions/workflows/nodejs.yml)
+[![Nuget](https://img.shields.io/nuget/v/OrleansDashboard)](https://www.nuget.org/packages/OrleansDashboard/)
+
+[Discuss on Discord](https://discord.com/channels/333727978460676096/1001528811256549396)
+
+---
 
 A dashboard for Microsoft Orleans which provides some simple metrics and insights into what is happening inside your Orleans appliction.
 
@@ -15,14 +33,14 @@ for a production monitoring system.
 Using the Package Manager Console:
 
 ```
-PM> Install-Package OrleansDashboard
+dotnet add package OrleansDashboard
 ```
 
 Then add with programmatic configuration:
 
 ```c#
-new SiloHostBuilder()
-  .UseDashboard(options => { })
+new HostBuilder()
+  .UseOrleans(o => o.UseDashboard(options => { })
   .Build();
 ```
 
@@ -35,10 +53,36 @@ automatic discovery of grains in Orleans. To enable automatic discovery of the g
 the configuration to:
 
 ```c#
-new SiloHostBuilder()
-  .ConfigureApplicationParts(parts => parts.AddFromApplicationBaseDirectory())
-  .UseDashboard(options => { })
+new HostBuilder()
+  .UseOrleans(o => {
+    o.ConfigureApplicationParts(parts => parts.AddFromApplicationBaseDirectory());
+    o.UseDashboard(options => { });
+  })
   .Build();
+```
+
+### Self-Hosted Dashboard
+
+In some cases you may wish to disable the dashboard's own web server, and host the dashboard on your own web application.
+
+You can configure to include the dashboard as middleware:
+
+```c#
+using Microsoft.AspNetCore.Http.Extensions;
+using Orleans;
+using Orleans.Hosting;
+
+var builder = WebApplication.CreateBuilder();
+
+builder.Host.UseOrleans(siloBuilder =>
+{
+  siloBuilder.UseLocalhostClustering();
+  siloBuilder.UseDashboard(x => x.HostSelf = true);
+});
+
+var app = builder.Build();
+
+app.Map("/dashboard", x => x.UseOrleansDashboard());
 ```
 
 ### CPU and Memory Metrics on Windows
@@ -67,19 +111,21 @@ The dashboard supports the following properties for the configuration:
 * `Username` : Set a username for accessing the dashboard (basic auth).
 * `Password` : Set a password for accessing the dashboard (basic auth).
 * `Host` : Host name to bind the web server to (default is *).
-* `Port` : Set the the number for the dashboard to listen on (default is 8080).
+* `Port` : Set the port number for the dashboard to listen on (default is 8080).
 * `HostSelf` : Set the dashboard to host it's own http server (default is true).
 * `CounterUpdateIntervalMs` : The update interval in milliseconds between sampling counters (default is 1000).
 
 ```c#
-new SiloHostBuilder()
-  .UseDashboard(options => {
-    options.Username = "USERNAME";
-    options.Password = "PASSWORD";
-    options.Host = "*";
-    options.Port = 8080;
-    options.HostSelf = true;
-    options.CounterUpdateIntervalMs = 1000;
+new HostBuilder()
+  .UseOrleans(o => {
+    o.UseDashboard(options => {
+      options.Username = "USERNAME";
+      options.Password = "PASSWORD";
+      options.Host = "*";
+      options.Port = 8080;
+      options.HostSelf = true;
+      options.CounterUpdateIntervalMs = 1000;
+    })
   })
   .Build();
 ```
@@ -93,6 +139,16 @@ Once your silos are running, you can connect to any of them using your web brows
 If you've started the dashboard on an alternative port, you'll need to specify that instead.
 
 The dashboard will also relay trace information over http. You can view this in the dashboard, or from the terminal: `curl http://silo-address:8080/Trace`
+
+### Grain Details
+
+For the state output we use some conventions:
+
+1. Looks for a parameter less method "GetState". Example: TestStateInMemoryGrain.cs
+2. Looks for methods thats returns types that are declared as IPersistentState<T> property in the concret grain type. Example: TestStateGrain.cs
+
+For Compound Key grains pass the id in format "{id},{additionalKey}", example: 123,testing
+
 
 ## Building the UI
 

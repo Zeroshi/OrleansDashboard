@@ -1,19 +1,20 @@
 ﻿using System.Collections.Generic;
 using System.Threading.Tasks;
-using Orleans;
 using Orleans.Concurrency;
 using Orleans.Runtime;
+using Orleans.Services;
 using OrleansDashboard.Model;
 
 namespace OrleansDashboard
 {
-    public interface ISiloGrain : IGrainWithStringKey
+    public interface ISiloGrainService : IGrainService
     {
-        [OneWay]
         Task SetVersion(string orleans, string host);
 
         [OneWay]
         Task ReportCounters(Immutable<StatCounter[]> stats);
+
+        Task Enable(bool enabled);
 
         Task<Immutable<Dictionary<string,string>>> GetExtendedProperties();
 

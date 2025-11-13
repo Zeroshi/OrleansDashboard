@@ -23,6 +23,10 @@ namespace OrleansDashboard
 
         Task<Immutable<Dictionary<string, GrainTraceEntry>>> GetSiloTracing(string address);
 
-        Task<Immutable<Dictionary<string, GrainMethodAggregate[]>>> TopGrainMethods();
+        Task<Immutable<Dictionary<string, GrainMethodAggregate[]>>> TopGrainMethods(int take);
+
+        Task<Immutable<string>> GetGrainState(string id, string grainType);
+
+        Task<Immutable<string[]>> GetGrainTypes();
     }
 }

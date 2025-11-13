@@ -45,11 +45,15 @@
         /// </summary>
         public bool HostSelf { get; set; } = true;
 
-
         /// <summary>
-        ///   Number of ms between counter samples.
+        ///   Number of ms between counter samples. Must be greater or equal to 1000.
         /// </summary>
         public int CounterUpdateIntervalMs { get; set; } = 1000;
+
+        /// <summary>
+        ///   The length of the history.
+        /// </summary>
+        public int HistoryLength { get; set; } = 100;
 
         /// <summary>
         ///   The port number the dashboard will use for self-hosting.

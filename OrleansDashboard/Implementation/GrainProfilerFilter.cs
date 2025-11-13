@@ -5,39 +5,35 @@ using System.Reflection;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Orleans;
+using OrleansDashboard.Metrics;
 
-namespace OrleansDashboard.Metrics
+namespace OrleansDashboard.Implementation
 {
     public class GrainProfilerFilter : IIncomingGrainCallFilter
     {
         public delegate string GrainMethodFormatterDelegate(IIncomingGrainCallContext callContext);
 
-        public static readonly GrainMethodFormatterDelegate DefaultGrainMethodFormatter = c => c.ImplementationMethod?.Name ?? "Unknown";
-        public static readonly Func<IIncomingGrainCallContext, string> NoopOldGrainMethodFormatter = x => "Noop";
-
+        public static readonly GrainMethodFormatterDelegate DefaultGrainMethodFormatter = FormatMethodName;
         private readonly GrainMethodFormatterDelegate formatMethodName;
         private readonly IGrainProfiler profiler;
         private readonly ILogger<GrainProfilerFilter> logger;
-        private readonly ConcurrentDictionary<MethodInfo, bool> shouldSkipCache = new ConcurrentDictionary<MethodInfo, bool>();
+        private readonly ConcurrentDictionary<MethodInfo, bool> shouldSkipCache = new();
 
-        public GrainProfilerFilter(IGrainProfiler profiler, ILogger<GrainProfilerFilter> logger, GrainMethodFormatterDelegate formatMethodName,
-            Func<IIncomingGrainCallContext, string> oldFormatMethodName)
+        public GrainProfilerFilter(IGrainProfiler profiler, ILogger<GrainProfilerFilter> logger, GrainMethodFormatterDelegate formatMethodName)
         {
             this.profiler = profiler;
+            this.formatMethodName = formatMethodName ?? DefaultGrainMethodFormatter;
             this.logger = logger;
-
-            if (oldFormatMethodName != NoopOldGrainMethodFormatter)
-            {
-                this.formatMethodName = new GrainMethodFormatterDelegate(oldFormatMethodName);
-            }
-            else
-            {
-                this.formatMethodName = formatMethodName ?? DefaultGrainMethodFormatter;
-            }
         }
 
         public async Task Invoke(IIncomingGrainCallContext context)
         {
+            if (!profiler.IsEnabled)
+            {
+                await context.Invoke();
+                return;
+            }
+
             if (ShouldSkipProfiling(context))
             {
                 await context.Invoke();
@@ -69,12 +65,36 @@ namespace OrleansDashboard.Metrics
 
                 var grainMethodName = formatMethodName(context);
 
+                if (grainMethodName == "ReceiveReminder")
+                {
+
+                }
+
                 profiler.Track(elapsedMs, context.Grain.GetType(), grainMethodName, isException);
             }
             catch (Exception ex)
             {
                 logger.LogError(100002, ex, "error recording results for grain");
             }
+        }
+
+        private static string FormatMethodName(IIncomingGrainCallContext context)
+        {
+            var methodName = context.ImplementationMethod?.Name ?? "Unknown";
+
+            if (methodName == nameof(IRemindable.ReceiveReminder) && context.Request.GetArgumentCount() == 2)
+            {
+                try 
+                {
+                    methodName = $"{methodName}({context.Request.GetArgument(0)})";
+                } 
+                catch
+                {
+                    // Could fail if the argument types do not match.
+                }
+            }
+
+            return methodName;
         }
 
         private bool ShouldSkipProfiling(IIncomingGrainCallContext context)

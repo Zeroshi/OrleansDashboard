@@ -5,13 +5,13 @@ using Orleans;
 using Orleans.Concurrency;
 using OrleansDashboard.Model;
 
-namespace OrleansDashboard
+namespace OrleansDashboard.Implementation.Grains
 {
     public class DashboardRemindersGrain : Grain, IDashboardRemindersGrain
     {
         private static readonly Immutable<ReminderResponse> EmptyReminders = new ReminderResponse
         {
-            Reminders = new ReminderInfo[0]
+            Reminders = Array.Empty<ReminderInfo>()
         }.AsImmutable();
 
         private readonly IReminderTable reminderTable;
@@ -53,8 +53,8 @@ namespace OrleansDashboard
         {
             return new ReminderInfo
             {
-                PrimaryKey = entry.GrainRef.PrimaryKeyAsString(),
-                GrainReference = entry.GrainRef.ToString(),
+                PrimaryKey = entry.GrainId.Key.ToString(),
+                GrainReference = entry.GrainId.ToString(),
                 Name = entry.ReminderName,
                 StartAt = entry.StartAt,
                 Period = entry.Period,
